@@ -102,7 +102,7 @@ model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers
 ###############################################################################
 
 criterion = nn.CrossEntropyLoss()
-hidden = model.init_hidden(args.batch_size)
+hidden = None
 total_loss = 0.
 
 ###############################################################################
@@ -166,7 +166,7 @@ def train(optimizer,min_batch,max_batch):
             # Starting each batch, we detach the hidden state from how it was previously produced.
             # If we didn't, the model would try backpropagating all the way to start of the dataset.
             hidden = repackage_hidden(hidden)
-            print(hidden)
+            #print(hidden)
             model.zero_grad()
             optimizer.zero_grad()
             output, hidden = model(data, hidden)
@@ -211,17 +211,18 @@ lr = args.lr
 best_val_loss = None
 
 #Construct optimizer
-optimizer=optim.LBFGS(model.parameters(),lr=args.lr,history_size=15)
+optimizer=optim.LBFGS(model.parameters(),lr=args.lr,history_size=5)
 
 # At any point you can hit Ctrl + C to break out of training early.
 def setUpTrain(min_batch,max_batch):
-    global train_data,val_data,test_data,model
+    global train_data,val_data,test_data,model,hidden
     torch.manual_seed(args.seed)
     device = torch.device("cuda" if args.cuda else "cpu")
     model=model.to(device)
     train_data=train_data.to(device)
     val_data=val_data.to(device)
     test_data=test_data.to(device)
+    hidden = model.init_hidden(args.batch_size)
     pid=os.getpid()
     try:
         for epoch in range(1, args.epochs+1):
