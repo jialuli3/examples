@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 class RNNModel(nn.Module):
@@ -42,8 +43,12 @@ class RNNModel(nn.Module):
         self.decoder.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, input, hidden):
+        #print("input",input.type())
         emb = self.drop(self.encoder(input))
+        #emb= emb.type(torch.FloatTensor)
+        #print("emb",emb.type())
         output, hidden = self.rnn(emb, hidden)
+        #print(output.type())
         output = self.drop(output)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
         return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden

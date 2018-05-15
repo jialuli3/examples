@@ -8,11 +8,9 @@ import torch.nn as nn
 import torch.onnx
 import torch.optim as optim
 import torch.multiprocessing as mp
-#mp.set_start_method('spawn')
 
 import data
 import model
-torch.backends.cudnn.enabled=False
 
 parser = argparse.ArgumentParser(description='PyTorch Wikitext-2 RNN/LSTM Language Model')
 parser.add_argument('--data', type=str, default='./data/wikitext-2',
@@ -63,7 +61,8 @@ args = parser.parse_args()
 ###############################################################################
 # Load data
 ###############################################################################
-corpus = data.Corpus(args.data)
+
+#corpus = data.Corpus(args.data)
 
 # Starting from sequential data, batchify arranges the dataset into columns.
 # For instance, with the alphabet as the sequence and batch size 4, we'd get
@@ -77,33 +76,36 @@ corpus = data.Corpus(args.data)
 # dependence of e. g. 'g' on 'f' can not be learned, but allows more efficient
 # batch processing.
 
-def batchify(data, bsz):
+#def batchify(data, bsz):
     # Work out how cleanly we can divide the dataset into bsz parts.
-    nbatch = data.size(0) // bsz
+#    nbatch = data.size(0) // bsz
     # Trim off any extra elements that wouldn't cleanly fit (remainders).
-    data = data.narrow(0, 0, nbatch * bsz)
+#    data = data.narrow(0, 0, nbatch * bsz)
     # Evenly divide the data across the bsz batches.
-    data = data.view(bsz, -1).t().contiguous()
-    return data
+#    data = data.view(bsz, -1).t().contiguous()
+#    return data.to(device)
 
-eval_batch_size = 10
-train_data = batchify(corpus.train, args.batch_size)
-val_data = batchify(corpus.valid, eval_batch_size)
-test_data = batchify(corpus.test, eval_batch_size)
+#eval_batch_size = 10
+#train_data = batchify(corpus.train, args.batch_size)
+#val_data = batchify(corpus.valid, eval_batch_size)
+#test_data = batchify(corpus.test, eval_batch_size)
 
 ###############################################################################
 # Build the model
 ###############################################################################
 
-ntokens = len(corpus.dictionary)
-model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied)
+#ntokens = len(corpus.dictionary)
+#model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied).to(device)
 ###############################################################################
 # Try to train in multiple processes
 ###############################################################################
+#model.share_memory()
+#processes=[]
 
-criterion = nn.CrossEntropyLoss()
-hidden = model.init_hidden(args.batch_size)
-total_loss = 0.
+
+#criterion = nn.CrossEntropyLoss()
+#hidden = model.init_hidden(args.batch_size)
+#total_loss = 0.
 
 ###############################################################################
 # Training code
@@ -150,10 +152,11 @@ def evaluate(data_source):
     return total_loss / len(data_source)
 
 
-def train(optimizer,min_batch,max_batch):
+def train(optimizer,min_batch,max_batch,model,train_data,val_data,test_data,criterion):
     # Turn on training mode which enables dropout.
-    global total_loss,model
     model.train()
+    global total_loss
+    print(total_loss)
     #total_loss = 0.
     start_time = time.time()
     #ntokens = len(corpus.dictionary)
@@ -161,12 +164,11 @@ def train(optimizer,min_batch,max_batch):
     #for batch, i in enumerate(range(0, train_data.size(0) - 1, args.bptt)):
     for batch, i in enumerate(range(min_batch, max_batch, args.bptt)):
         def closure():
-            global total_loss,hidden
             data, targets = get_batch(train_data, i)
             # Starting each batch, we detach the hidden state from how it was previously produced.
             # If we didn't, the model would try backpropagating all the way to start of the dataset.
+            global hidden,total_loss
             hidden = repackage_hidden(hidden)
-            print(hidden)
             model.zero_grad()
             optimizer.zero_grad()
             output, hidden = model(data, hidden)
@@ -175,6 +177,7 @@ def train(optimizer,min_batch,max_batch):
             del output,targets
             loss.backward()
             total_loss += loss.item()
+            #print(loss.item())
             return loss.item()
         optimizer.step(closure)
 
@@ -211,22 +214,15 @@ lr = args.lr
 best_val_loss = None
 
 #Construct optimizer
-optimizer=optim.LBFGS(model.parameters(),lr=args.lr,history_size=15)
 
 # At any point you can hit Ctrl + C to break out of training early.
-def setUpTrain(min_batch,max_batch):
-    global train_data,val_data,test_data,model
-    torch.manual_seed(args.seed)
-    device = torch.device("cuda" if args.cuda else "cpu")
-    model=model.to(device)
-    train_data=train_data.to(device)
-    val_data=val_data.to(device)
-    test_data=test_data.to(device)
+def setUpTrain(min_batch,max_batch,model,train_data,val_data,test_data,criterion):
+    optimizer=optim.LBFGS(model.parameters(),lr=args.lr,history_size=15)
     pid=os.getpid()
     try:
         for epoch in range(1, args.epochs+1):
             epoch_start_time = time.time()
-            train(optimizer,min_batch,max_batch)
+            train(optimizer,min_batch,max_batch,model,train_data,val_data,test_data,criterion)
             val_loss = evaluate(val_data)
             print('-' * 89)
             print('{}| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
@@ -266,14 +262,39 @@ def setUpTrain(min_batch,max_batch):
 
 
 if __name__ == '__main__':
+    mp.set_start_method('spawn')
+    device = torch.device("cuda" if args.cuda else "cpu")
+    torch.manual_seed(args.seed)
+    def batchify(data, bsz,device):
+    # Work out how cleanly we can divide the dataset into bsz parts.
+        nbatch = data.size(0) // bsz
+    # Trim off any extra elements that wouldn't cleanly fit (remainders).
+        data = data.narrow(0, 0, nbatch * bsz)
+    # Evenly divide the data across the bsz batches.
+        data = data.view(bsz, -1).t().contiguous()
+        return data.to(device)
+    corpus = data.Corpus(args.data)
+    eval_batch_size = 10
+    train_data = batchify(corpus.train, args.batch_size, device)
+    val_data = batchify(corpus.valid, eval_batch_size, device)
+    test_data = batchify(corpus.test, eval_batch_size, device)
+    print(train_data.type())
+    ntokens = len(corpus.dictionary)
+    model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied).to(device)
+
     model.share_memory()
     processes=[]
+
+    criterion = nn.CrossEntropyLoss()
+    hidden = model.init_hidden(args.batch_size)
+    total_loss = 0.
+
     sample_batch_size=int(train_data.size(0)/args.num_processes)
     for rank in range(args.num_processes):
         if rank<args.num_processes-1:
-            p=mp.Process(target=setUpTrain,args=(rank*sample_batch_size,(rank+1)*(sample_batch_size)))
+            p=mp.Process(target=setUpTrain,args=(rank*sample_batch_size,(rank+1)*(sample_batch_size),model,train_data,val_data,test_data,criterion))
         else:
-            p=mp.Process(target=setUpTrain,args=(rank*sample_batch_size,min((rank+1)*(sample_batch_size),train_data.size(0)-1)))
+            p=mp.Process(target=setUpTrain,args=(rank*sample_batch_size,min((rank+1)*(sample_batch_size),train_data.size(0)-1),model,train_data,val_data,test_data,criterion))
         p.start()
         processes.append(p)
     for p in processes:
