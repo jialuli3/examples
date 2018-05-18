@@ -1,0 +1,12 @@
+original main file with commands
+python main.py --cuda --epochs 6 --tied
+| End of training | test loss  4.88 | test ppl   131.81
+
+
+changed to lbfgs_working_version.py
+lbfgs learning rate 0.01 history_size=5 epoch 6
+| End of training | test loss  7.10 | test ppl    1211
+
+changed to lbfgs_working_version.py
+lbfgs learning rate 0.01 history_size=5 epoch 40
+| End of training | test loss  6.91 | test ppl   997.65

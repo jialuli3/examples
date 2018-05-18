@@ -160,11 +160,11 @@ def train(optimizer):
         def closure():
             global total_loss,hidden
             data, targets = get_batch(train_data, i)
-            print(data.type(),targets.type())
+            #print(data.type(),targets.type())
             # Starting each batch, we detach the hidden state from how it was previously produced.
             # If we didn't, the model would try backpropagating all the way to start of the dataset.
             hidden = repackage_hidden(hidden)
-            print(hidden)
+            #print(hidden)
             model.zero_grad()
             optimizer.zero_grad()
             output, hidden = model(data, hidden)
@@ -189,7 +189,7 @@ def train(optimizer):
             print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
                     'loss {:5.2f} | ppl {:8.2f}'.format(
                 epoch, batch, len(train_data) // args.bptt, lr,
-                elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
+                elapsed * 1000 / args.log_interval, cur_loss, (cur_loss)))
             total_loss = 0
             start_time = time.time()
 
@@ -207,7 +207,7 @@ def export_onnx(path, batch_size, seq_len):
 lr = args.lr
 best_val_loss = None
 
-optimizer=optim.LBFGS(model.parameters(),lr=args.lr,history_size=15)
+optimizer=optim.LBFGS(model.parameters(),lr=args.lr,history_size=2)
 
 # At any point you can hit Ctrl + C to break out of training early.
 try:
@@ -218,7 +218,7 @@ try:
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
                 'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
-                                           val_loss, math.exp(val_loss)))
+                                           val_loss, (val_loss)))
         print('-' * 89)
         # Save the model if the validation loss is the best we've seen so far.
         if not best_val_loss or val_loss < best_val_loss:

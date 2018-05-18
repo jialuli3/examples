@@ -25,7 +25,7 @@ parser.add_argument('--nhid', type=int, default=200,
                     help='number of hidden units per layer')
 parser.add_argument('--nlayers', type=int, default=2,
                     help='number of layers')
-parser.add_argument('--lr', type=float, default=20,
+parser.add_argument('--lr', type=float, default=0.01,
                     help='initial learning rate')
 parser.add_argument('--clip', type=float, default=0.25,
                     help='gradient clipping')
@@ -43,7 +43,7 @@ parser.add_argument('--seed', type=int, default=1111,
                     help='random seed')
 parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
-parser.add_argument('--log-interval', type=int, default=200, metavar='N',
+parser.add_argument('--log-interval', type=int, default=50, metavar='N',
                     help='report interval')
 parser.add_argument('--save', type=str, default='model.pt',
                     help='path to save the final model')
@@ -150,7 +150,7 @@ def evaluate(data_source):
     return total_loss / len(data_source)
 
 
-def train(optimizer,min_batch,max_batch):
+def train(optimizer,min_batch,max_batch,epoch):
     # Turn on training mode which enables dropout.
     global total_loss,model
     model.train()
@@ -184,12 +184,12 @@ def train(optimizer,min_batch,max_batch):
             p.data.add_(-lr, p.grad.data)
 
         #total_loss += loss.item()
-
+        pid=os.getpid()
         if batch % args.log_interval == 0 and batch > 0:
             cur_loss = total_loss / args.log_interval
             elapsed = time.time() - start_time
-            print('| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
-                    'loss {:5.2f} | ppl {:8.2f}'.format(
+            print('{}| epoch {:3d} | {:5d}/{:5d} batches | lr {:02.2f} | ms/batch {:5.2f} | '
+                    'loss {:5.2f} | ppl {:8.2f}'.format(pid,
                 epoch, batch, len(train_data) // args.bptt, lr,
                 #elapsed * 1000 / args.log_interval, cur_loss, math.exp(cur_loss)))
                 elapsed * 1000 / args.log_interval, cur_loss, (cur_loss)))
@@ -208,7 +208,6 @@ def export_onnx(path, batch_size, seq_len):
 
 # Loop over epochs.
 lr = args.lr
-best_val_loss = None
 
 #Construct optimizer
 optimizer=optim.LBFGS(model.parameters(),lr=args.lr,history_size=5)
@@ -224,10 +223,11 @@ def setUpTrain(min_batch,max_batch):
     test_data=test_data.to(device)
     hidden = model.init_hidden(args.batch_size)
     pid=os.getpid()
+    best_val_loss = None
     try:
         for epoch in range(1, args.epochs+1):
             epoch_start_time = time.time()
-            train(optimizer,min_batch,max_batch)
+            train(optimizer,min_batch,max_batch,epoch)
             val_loss = evaluate(val_data)
             print('-' * 89)
             print('{}| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
